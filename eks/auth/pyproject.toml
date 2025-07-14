@@ -1,0 +1,15 @@
+[project]
+name = "auth"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pyjwt",
+    "python-multipart",
+    "prometheus-fastapi-instrumentator",
+    "loguru>=0.7.3",
+]
