@@ -1,0 +1,8 @@
+apiVersion: v1
+# * can think of `ConfigMap` like `SSM Parameter Store` (**non-sensitive** data)
+kind: ConfigMap
+metadata:
+  name: {{ .Values.config.name }}  # what's referenced in `...deployment.yaml` file
+data:
+  APP2_URL: {{ .Values.config.app2Url | quote }}
+  

@@ -1,0 +1,7 @@
+apiVersion: v1
+# * can think of `ConfigMap` like `SSM Parameter Store` (**non-sensitive** data)
+kind: ConfigMap
+metadata:
+  name: fastapi-app1-config  # what's referenced in `...deployment.yaml` file
+data:
+  APP2_URL: http://fastapi-app2-service

@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+# * can think of `Ingress` as an ALB - exposing a service to the outside world (internet)
+kind: Ingress
+metadata:
+  name: fastapi-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /  # optional - only needed if want to rewrite path
+    # traefik.ingress.kubernetes.io/router.entrypoints: web  # use trafik ingress controller instead of nginx
+spec:
+  ingressClassName: nginx  # specify which ingress controller to use
+  # ingressClassName: traefik  # use trafik ingress controller instead of nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fastapi-app1-service  # matches the name of the Service created
+                port:
+                  number: 80
+          - path: /app2
+            pathType: Prefix
+            backend:
+              service:
+                name: fastapi-app2-service  # matches the name of the Service created
+                port:
+                  number: 80  # can now access the service using http://localhost:80

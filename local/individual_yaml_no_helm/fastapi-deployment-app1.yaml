@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+# * can think of `Deployment` as an ECS `Service` - manage set of pods (ECS tasks)
+kind: Deployment  # specify the kind of resource to create (here `Deployment`) - one level above `Pod` (Task)
+
+# ************************************************************ #
+# * example commands used with `metadata.name`
+#   * `kubectl get deployment fastapi-app`
+#   * `kubectl delete deployment fastapi-app`
+metadata:  # give unique name to this `kind` (here `Deployment`) so it can be managed by Kubernetes
+  name: fastapi-app1
+# ************************************************************ #
+
+spec:
+  replicas: 2
+  # * `selector` and `template` `app` values should match
+  selector:
+    matchLabels:  # which pods should be managed by this deployment (matches pods with this label)
+      app: fastapi-app1
+  template:
+    metadata:
+      labels:  # labels that will be assigned to pods created by this deployment
+        app: fastapi-app1
+    spec:
+      containers:
+        - name: fastapi-app1  # name of the container (can be anything)
+          image: fastapi-app1  # Docker image name to run
+
+          # ***************************************************************************************** 
+          # * if not set, if image is untagged or tagged as `latest`, Kubernetes always tries to pull image from Docker Hub
+          # * fails here b/c image is imported locally directly into Kubernetes cluster (not in Docker Hub)
+          #   * `k3d image import fastapi-app1 -c demo`
+          imagePullPolicy: IfNotPresent  # if image already exists locally on node, don’t try to pull from registry
+          # ***************************************************************************************** 
+          
+          ports:
+            - containerPort: 80  # exposes port 80 on the container - container is listening on this port
+
+          env:
+            - name: APP2_URL  # environment variable name to be used in the container
+              valueFrom:
+                configMapKeyRef:
+                  name: fastapi-app1-config
+                  key: APP2_URL  # must match the key in the `ConfigMap`
+
+          # ***************************************************************************************** 
+          # * health checks to determine if the container is running and ready to accept traffic
+          livenessProbe:
+            httpGet:
+              path: /healthz  # health check endpoint
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz  # health check endpoint
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          # ***************************************************************************************** 

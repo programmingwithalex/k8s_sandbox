@@ -1,0 +1,17 @@
+ingress:
+  enabled: true
+  className: nginx
+  host: localhost
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  paths:
+    - path: /
+      serviceName: fastapi-app1-service
+      servicePort: 80
+    - path: /app2
+      serviceName: fastapi-app2-service
+      servicePort: 80
+
+config:
+  name: fastapi-app1-config
+  app2Url: http://fastapi-app2-service

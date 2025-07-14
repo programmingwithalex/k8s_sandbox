@@ -1,0 +1,28 @@
+appLabel: fastapi-app2
+replicaCount: 2
+
+image:
+  repository: fastapi-app2
+  tag: latest
+  pullPolicy: IfNotPresent
+
+container:
+  name: api
+  port: 80
+
+service:
+  name: fastapi-app2-service
+  type: ClusterIP  # keep this as ClusterIP for internal communication between services
+  # type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 2
+    periodSeconds: 5

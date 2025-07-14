@@ -1,0 +1,25 @@
+apiVersion: v1
+# * can think of `Service` as an ECS `Load Balancer` - manage set of pods (ECS tasks) and expose them to the outside world
+# * provides stable DNS/IP address and load balancing for the pods
+kind: Service  # specify the kind of resource to create (here `Service`) - one level above `Deployment`
+
+# ************************************************************ #
+# * example commands used with `metadata.name`
+#   * `kubectl get service fastapi-service`
+#   * `kubectl delete service fastapi-app`
+metadata:  # give unique name to this `kind` (here `Service`) so it can be managed by Kubernetes
+  name: fastapi-app2-service
+# ************************************************************ #
+
+spec:
+  # ************************************************************ #
+  # * `ClusterIP` - exposes the `Service` internally only - no external port (route to this Service from inside the cluster)
+  type: ClusterIP
+  # ************************************************************ #
+
+  selector:
+    app: fastapi-app2  # which Pods to route traffic to
+  ports:
+    - protocol: TCP
+      port: 80  # port that the `Service` will be exposed on (use inside cluster - http://fastapi-app2-service:80)
+      targetPort: 80  # exposed by the container inside the `Pod` (must match `containerPort` in `Deployment`)
