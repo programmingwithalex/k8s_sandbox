@@ -1,0 +1,29 @@
+{{- if .Values.ingress.enabled }}
+
+apiVersion: networking.k8s.io/v1
+# * can think of `Ingress` as an ALB - exposing a service to the outside world (internet)
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  annotations:
+    {{- range $key, $val := .Values.ingress.annotations }}  # for loop over key-value pairs in values.yaml
+    {{ $key }}: {{ $val | quote }}
+    {{- end }}
+    # nginx.ingress.kubernetes.io/rewrite-target: /  # optional - only needed if want to rewrite path
+    # traefik.ingress.kubernetes.io/router.entrypoints: web  # use trafik ingress controller instead of nginx
+spec:
+  ingressClassName: {{ .Values.ingress.className }}  # specify which ingress controller to use
+  # ingressClassName: traefik  # use trafik ingress controller instead of nginx
+  rules:
+    - http:
+        paths:
+          {{- range .Values.ingress.paths }}  # for loop over the paths defined in values.yaml
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ .serviceName }}  # matches the name of the Service created
+                port:
+                  number: {{ .servicePort }}  # can now access the service using http://localhost:80
+          {{- end }}
+{{- end }}

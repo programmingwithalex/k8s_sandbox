@@ -1,0 +1,13 @@
+ingress:
+  enabled: true
+  # If you ever want to change the controller class, do it here
+  ingressClassName: nginx-prod  # which ingress controller to use
+  annotations:
+    kubernetes.io/ingress.class: nginx-prod
+
+apps:
+  - name: frontend
+    path: /
+    pathType: Prefix
+    serviceName: react-frontend
+    servicePort: 80

@@ -1,0 +1,27 @@
+ingress:
+  enabled: true
+  # If you ever want to change the controller class, do it here
+  ingressClassName: nginx-prod  # which ingress controller to use
+  annotations:
+    kubernetes.io/ingress.class: nginx-prod
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
+apps:
+  - name: app1
+    path: /app1(/|$)(.*)
+    pathType: ImplementationSpecific
+    serviceName: app1-service
+    servicePort: 80
+
+  - name: app2
+    path: /app2(/|$)(.*)
+    pathType: ImplementationSpecific
+    serviceName: app2-service
+    servicePort: 80
+
+  # must define to allow frontend to send request to auth_service at <alb_dns_name>/auth
+  - name: auth
+    path: /auth(/|$)(.*)
+    pathType: ImplementationSpecific
+    serviceName: auth-service
+    servicePort: 80
