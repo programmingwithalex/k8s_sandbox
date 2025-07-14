@@ -2,7 +2,7 @@
 
 ## Project Layout
 
-```
+```markdown
 ├── eks/
 │   ├── app1/
 │   ├── app2/
@@ -38,7 +38,11 @@ Main components:
 - [hey](https://github.com/rakyll/hey) (load testing)
   - Download and place `hey.exe` in project root
 
-## Quick Start (Local)
+---
+
+## Quick Starts
+
+### Quick Start (Local)
 
 1. **Start k3d cluster**
 
@@ -58,7 +62,7 @@ Main components:
      --namespace alex-sandbox `
      --create-namespace
    ```
-  
+
 3. **Deploy microservices**
 
    ```powershell
@@ -73,9 +77,112 @@ Main components:
    - App2: `http://localhost/app2`
    - Auth: `http://localhost/auth`
 
-See below for more details on tools, dashboards, and advanced usage.
+### Quick Start (AWS EKS)
 
-### Authenticating Kubernetes Dashboard
+1. **Prerequisites**
+
+   - AWS CLI configured
+   - `kubectl` and `helm` installed
+   - EKS cluster created and `kubectl` context set
+   - ArgoCD CLI (optional)
+
+2. **Install ArgoCD in EKS**
+
+   ```powershell
+   kubectl create namespace argocd
+   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+   ```
+
+   - Get ArgoCD admin password:
+
+     ```powershell
+     kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode
+     ```
+
+   - Port-forward ArgoCD UI:
+
+     ```powershell
+     kubectl port-forward svc/argocd-server -n argocd 8080:443
+     ```
+
+   - Access UI at: `https://localhost:8080` (username: `admin`)
+
+3. **Deploy Applications via ApplicationSet**
+
+   - Edit and apply the ApplicationSet manifest:
+
+     ```powershell
+     kubectl apply -f eks/applications_sets/application_set.yaml
+     ```
+
+   - This will create ArgoCD applications for each microservice (app1, app2, auth) using the provided Helm charts and values files.
+
+4. **Sync and Monitor Deployments**
+
+   - Use ArgoCD UI or CLI to sync applications and monitor status.
+
+   - Example CLI sync:
+
+     ```powershell
+     argocd app sync app1
+     argocd app sync app2
+     argocd app sync auth
+     ```
+
+5. **Access Services**
+
+   - Use the configured ingress (ALB, Nginx, etc.) to access your services.
+
+   - Example URLs (replace with your actual ALB DNS):
+
+     - App1: `http://<alb-dns>/app1`
+     - App2: `http://<alb-dns>/app2`
+     - Auth: `http://<alb-dns>/auth`
+
+See `eks/applications_sets/application_set.yaml` and deployment folders for customization.
+
+### Quick Start (Makefile)
+
+You can use the provided `Makefile` to automate common deployment tasks for both local and AWS EKS environments.
+
+#### Usage
+
+List available targets:
+
+```powershell
+make help
+```
+
+Typical commands:
+
+##### Local Deployment
+
+From `local/` directory:
+
+  ```powershell
+  make deploy-all  # deploy metalLB and four microservices
+  ```
+
+Additional targets and details can be found in `local/Makefile`.
+
+##### AWS EKS Deployment
+
+From `eks/` directory:
+
+  ```powershell
+  make deploy-nginx-controller  # deploy nginx controller for eks cluster
+  make deploy-ingressclass-alb-controller  # deploy ALB controller for eks cluster
+  make deploy-prometheus-stack  # deploys prometheus and grafana within the eks cluster
+  maek deploy-ingress  # deploys nginx for api backend and alb for frontend (frontend can't have path rewrites)
+  make argocd-create-namespace  # create argocd namespace (if not already created)
+  make argocd-applicationset  # deploy four microservices from argocd applicationset
+  ```
+
+Additional targets and details can be found in `eks/Makefile`.
+
+---
+
+## Authenticating Kubernetes Dashboard
 
 1. Create an `admin‑user` ServiceAccount and give it `cluster‑admin` rights
 2. Bind it to the `cluster‑admin` role
@@ -83,7 +190,7 @@ See below for more details on tools, dashboards, and advanced usage.
 
 ```powershell
 # 1) Create the ServiceAccount
-kubectl create serviceaccount admin-user -n kubernetes-dashboard
+kubectl create **serviceaccount** admin-user -n kubernetes-dashboard
 
 # 2) Bind it to the cluster‑admin role
 kubectl create clusterrolebinding admin-user `
