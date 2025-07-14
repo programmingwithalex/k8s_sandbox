@@ -1,0 +1,17 @@
+[project]
+name = "app1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pyjwt",
+    "python-multipart",
+    "prometheus-fastapi-instrumentator",
+    "loguru>=0.7.3",
+    "python-dotenv>=1.1.0",
+    "pytest-httpx>=0.35.0",
+]
