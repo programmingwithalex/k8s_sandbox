@@ -1,36 +1,79 @@
-# Project
+# Kubernetes Sandbox
 
-## Install
+## Project Layout
 
-- [`k3d`](https://k3d.io/stable/) - `choco install k3d`
-  - lightweight wrapper to run `k3s`
+```
+├── eks/
+│   ├── app1/
+│   ├── app2/
+│   ├── auth/
+│   ├── ingress_alb/
+│   ├── ingress_nginx_api/
+│   ├── ingress_nginx_frontend/
+│   ├── monitoring/
+│   ├── grafana/
+│   ├── applications_sets/
+│   └── ...
+├── react-frontend/
+├── local/
+├── hey.exe
+├── Makefile
+├── README.md
+└── ...
+```
 
-## Tools
+Main components:
 
-- `kubectl` - Kubernetes command line tool
-  - `kubectl config current-context` - get current cluster in `kuberctl` context
-  - `kubectl config get-contexts` - get all contexts
-  - `kubectl config use-context <context-name>` - switch contexts
+- Microservices: `app1`, `app2`, `auth` (FastAPI)
+- Frontend: `react-frontend` (React + Vite)
+- Kubernetes manifests & Helm charts: `*-deployment/`, `ingress_*`, `monitoring/`, `grafana/`
+- Local dev: `local/`
 
-## Kubernetes Web Dashboard Manager
+## Prerequisites
 
-### Launching Kubernetes Dashboard Server
+- [k3d](https://k3d.io/stable/) (local Kubernetes cluster)
+  - Install: `choco install k3d`
+- [kubectl](https://kubernetes.io/docs/tasks/tools/)
+- [Helm](https://helm.sh/docs/intro/install/)
+- [hey](https://github.com/rakyll/hey) (load testing)
+  - Download and place `hey.exe` in project root
 
-- `kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml`
-  - creates `kubernetes-dashboard` `namespace`
-  - spins up the Dashboard server Deployment (on port 8443) with its Service, ServiceAccount, Secrets, and ConfigMap
-  - installs the dashboard‑metrics‑scraper Deployment and Service (to pull cluster metrics)
-  - wire up necessary RBAC (Roles, ClusterRoles, RoleBindings, ClusterRoleBindings) so Dashboard can read and modify its own resources and fetch metrics
-- not recommended for production
-  - needs elevated permissions
-  - use grafana instead
+## Quick Start (Local)
 
-### Access Kubernetes Dashboard
+1. **Start k3d cluster**
 
-- `kubectl proxy --address='0.0.0.0' --disable-filter=true`
-  - spins up a local API‑server proxy that your browser can talk to
-- `http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/`
-  - URL to access dashboard
+   ```powershell
+   k3d cluster create demo `
+     --agents 1 `
+     --port "80:80@loadbalancer" `
+     --k3s-arg "--disable=traefik@server:0"
+   ```
+
+2. **Install Nginx Ingress Controller**
+
+   ```powershell
+   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+   helm repo update
+   helm install ingress-nginx ingress-nginx/ingress-nginx `
+     --namespace alex-sandbox `
+     --create-namespace
+   ```
+  
+3. **Deploy microservices**
+
+   ```powershell
+   kubectl apply -f eks/app1-deployment/argocd-dev.yaml
+   kubectl apply -f eks/app2-deployment/argocd-dev.yaml
+   kubectl apply -f eks/auth-deployment/argocd-dev.yaml
+   ```
+
+4. **Access services**
+
+   - App1: `http://localhost/app1`
+   - App2: `http://localhost/app2`
+   - Auth: `http://localhost/auth`
+
+See below for more details on tools, dashboards, and advanced usage.
 
 ### Authenticating Kubernetes Dashboard
 
