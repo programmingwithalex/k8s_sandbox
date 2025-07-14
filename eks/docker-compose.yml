@@ -1,0 +1,61 @@
+services:
+  react-frontend:
+    build:
+      context: ./react-frontend
+      dockerfile: Dockerfile_local
+    container_name: react-frontend
+    ports:
+      - "8003:80"
+    networks:
+      - backend
+
+  fastapi-auth-service:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    container_name: auth-service
+    environment:
+      - ENV=production
+      - SECRET_KEY=supersecret
+      - ALGORITHM=HS256
+    ports:
+      - "8000:80"
+    networks:
+      - backend
+
+  fastapi-app-1-service:
+    build:
+      context: ./app1
+      dockerfile: Dockerfile
+    container_name: app1
+    environment:
+      - ENV=production
+      - SECRET_KEY=supersecret
+      - ALGORITHM=HS256
+      - APP2_URL=http://fastapi-app2-service:80
+      - AUTH_SERVICE_URL=http://fastapi-auth-service:80
+    ports:
+      - "8001:80"
+    depends_on:
+      - fastapi-auth-service
+      - fastapi-app2-service
+    networks:
+      - backend
+
+  fastapi-app2-service:
+    build:
+      context: ./app2
+      dockerfile: Dockerfile
+    container_name: app2
+    environment:
+      - ENV=production
+      - SECRET_KEY=supersecret
+      - ALGORITHM=HS256
+    ports:
+      - "8002:80"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
