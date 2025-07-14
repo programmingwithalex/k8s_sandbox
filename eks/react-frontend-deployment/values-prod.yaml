@@ -1,0 +1,33 @@
+appLabel: react-frontend
+replicaCount: 2
+
+image:
+  # must specify full ECR repository URL for Argo CD to pull the image
+  repository: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/react-frontend
+  tag: latest
+  pullPolicy: Always
+
+container:
+  name: react-frontend
+  port: 80
+
+service:
+  name: react-frontend
+  type: ClusterIP  # keep this as ClusterIP for internal communication between services
+  # type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+# probes:
+#   liveness:
+#     path: /healthz
+#     initialDelaySeconds: 5
+#     periodSeconds: 30
+#   readiness:
+#     path: /healthz
+#     initialDelaySeconds: 2
+#     periodSeconds: 30
+
+config:
+  name: frontend-config
+  # app2Url: http://fastapi-app-2-service

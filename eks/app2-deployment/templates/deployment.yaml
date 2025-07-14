@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+# * can think of `Deployment` as an ECS `Service` - manage set of pods (ECS tasks)
+kind: Deployment  # specify the kind of resource to create (here `Deployment`) - one level above `Pod` (Task)
+
+# ************************************************************ #
+# * example commands used with `metadata.name`
+#   * `kubectl get deployment fastapi-app`
+#   * `kubectl delete deployment fastapi-app`
+metadata:  # give unique name to this `kind` (here `Deployment`) so it can be managed by Kubernetes
+  name: {{ .Release.Name }}-deployment
+# ************************************************************ #
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # * `selector` and `template` `app` values should match
+  selector:
+    matchLabels:  # which pods should be managed by this deployment (matches pods with this label)
+      app: {{ .Values.appLabel }}
+  template:
+    metadata:
+      labels:  # labels that will be assigned to pods created by this deployment
+        app: {{ .Values.appLabel }}
+    spec:
+      containers:
+        - name: {{ .Values.container.name }}  # name of the container (can be anything)
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }} # Docker image name to run
+
+          # *****************************************************************************************
+          # * if not set, if image is untagged or tagged as `latest`, Kubernetes always tries to pull image from Docker Hub
+          # * fails here b/c image is imported locally directly into Kubernetes cluster (not in Docker Hub)
+          #   * `k3d image import fastapi-app-1 -c demo`
+          imagePullPolicy: {{ .Values.image.pullPolicy }}  # if image already exists locally on node, don’t try to pull from registry
+          # *****************************************************************************************
+
+          ports:
+            - containerPort: {{ .Values.container.port }}  # exposes port 80 on the container - container is listening on this port
+
+          # *****************************************************************************************
+          # * health checks to determine if the container is running and ready to accept traffic
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}  # health check endpoint
+              port: {{ .Values.container.port }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}  # health check endpoint
+              port: {{ .Values.container.port }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          # *****************************************************************************************

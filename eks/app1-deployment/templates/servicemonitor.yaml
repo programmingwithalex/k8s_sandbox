@@ -1,0 +1,20 @@
+# ServiceMonitor tells Prometheus to scrape metrics from this service
+apiVersion: monitoring.coreos.com/v1  # CRD for Prometheus Operator
+kind: ServiceMonitor  # Custom resource for monitoring a Service
+metadata:
+  name: {{ .Release.Name }}-deployment
+  labels:
+    # must match the Prometheus release label so Prometheus discovers this ServiceMonitor
+    # also must be used for nginx ingress controller label so Prometheus and Grafana can scrape metrics
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.appLabel }}  # Selects the Service with this label (should match your Service's selector)
+  endpoints:
+    - port: {{ .Values.portName }}  # Name of the port in your Service to scrape (from values.yaml)
+      path: {{ .Values.serviceMonitor.path }}  # Path to scrape for Prometheus metrics (from values.yaml)
+      interval: {{ .Values.serviceMonitor.interval }}  # How often to scrape metrics (from values.yaml)
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}  # Only look for Services in this namespace

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+# * can think of `Deployment` as an ECS `Service` - manages a set of pods (like ECS tasks)
+kind: Deployment  # specify the kind of resource to create (here `Deployment`)
+
+# ************************************************************ #
+# * example commands used with `metadata.name`
+#   * `kubectl get deployment react-frontend`
+#   * `kubectl delete deployment react-frontend`
+metadata:  # unique name for this Deployment so it can be managed by Kubernetes
+  name: {{ .Release.Name }}-deployment
+# ************************************************************ #
+
+spec:
+  replicas: {{ .Values.replicaCount }}  # number of pod replicas to run
+  selector:
+    matchLabels:  # which pods should be managed by this deployment (matches pods with this label)
+      app: {{ .Values.appLabel }}
+  template:
+    metadata:
+      labels:  # labels that will be assigned to pods created by this deployment
+        app: {{ .Values.appLabel }}
+    spec:
+      containers:
+        - name: {{ .Values.container.name }}  # name of the container (can be anything)
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }} # Docker image name to run
+
+          # ***************************************************************************************** #
+          # * if not set, if image is untagged or tagged as `latest`, Kubernetes always tries to pull image from Docker Hub
+          # * set imagePullPolicy to control when Kubernetes pulls the image
+          # ***************************************************************************************** #
+
+          ports:
+            - containerPort: {{ .Values.container.port }}  # exposes port 80 on the container - container is listening on this port

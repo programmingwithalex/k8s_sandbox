@@ -1,0 +1,48 @@
+appLabel: auth
+replicaCount: 2
+
+jwt:
+  secretKey: supersecret
+  algorithm: HS256
+
+image:
+  # must specify full ECR repository URL for Argo CD to pull the image
+  repository: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/auth-service
+  tag: latest
+  pullPolicy: Always
+
+container:
+  name: auth
+  port: 80
+
+portName: http  # Single source of truth for port name used by Service and ServiceMonitor
+
+service:
+  name: auth-service  # services are discovered by this name
+  type: ClusterIP  # keep this as ClusterIP for internal communication between services
+  # type: LoadBalancer  # would expose the service externally, but not needed here
+  port: 80
+  targetPort: 80
+
+config:
+  name: auth-config
+  allowedOrigins: http://react-frontend:80, http://app1-service:80, http://app2-service:80
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 30
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 2
+    periodSeconds: 30
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 50
+
+serviceMonitor:
+  enabled: false  # default values.yaml (not env specific) leave not enabled to prevent duplicate ServiceMonitors

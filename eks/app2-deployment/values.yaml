@@ -1,0 +1,31 @@
+appLabel: app2
+replicaCount: 2
+image:
+  # must specify full ECR repository URL for Argo CD to pull the image
+  repository: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/app-2
+  tag: 70b30f58facedd4cf52f1464b3b95a270270c092
+  pullPolicy: Always
+container:
+  name: api
+  port: 80
+portName: http # Single source of truth for port name used by Service and ServiceMonitor
+service:
+  name: app2-service
+  type: ClusterIP # keep this as ClusterIP for internal communication between services
+  # type: LoadBalancer
+  port: 80
+  targetPort: 80
+config:
+  name: app2-config
+  allowedOrigins: http://react-frontend:80, http://app1-service:80
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 30
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 2
+    periodSeconds: 30
+serviceMonitor:
+  enabled: false  # default values.yaml (not env specific) leave not enabled to prevent duplicate ServiceMonitors
