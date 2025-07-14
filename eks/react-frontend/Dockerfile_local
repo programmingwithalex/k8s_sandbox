@@ -1,0 +1,27 @@
+# ****************************************************************** #
+# Build stage
+# runs build script (npm run build) to generate the production-ready static files in the /app/dist directory
+# stage needed before production stage to ensure only the optimized, static build output is included in final image
+# keeps production image small, secure, and free from unnecessary build tools and source files
+
+# * stage named 'build' to encapsulate the build process - referenced later in the production stage
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+COPY .env_local .env
+RUN npm run build
+# ****************************************************************** #
+
+# ****************************************************************** #
+# Production stage
+# copies only optimized build output from the build stage, ensuring lightweight and secure production image
+
+FROM nginx:alpine
+# * --from=build specifies the build stage as the source for the files to copy
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+# * start Nginx web server in foreground to serve static files
+CMD ["nginx", "-g", "daemon off;"]
+# ****************************************************************** #
