@@ -1,0 +1,19 @@
+# * uses existing AWS ALB Ingress Controller - listening on port 80
+# * values.yaml override for Grafana
+# * apply with `helm upgrade --install grafana ./grafana -f values_aws_alb.yaml`
+
+grafana:
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      # ALB-specific annotations
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    # a list of hostnames (strings), not maps
+    hosts:
+      - k8s-alexsand-fastapii-24220610c8-74839953.us-east-1.elb.amazonaws.com
+    # a simple list of path prefixes
+    paths:
+      - /grafana/*

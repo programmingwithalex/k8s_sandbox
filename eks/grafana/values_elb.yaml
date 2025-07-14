@@ -1,0 +1,18 @@
+# * dedicated service lb - Kubernetes provisions internal‑only ELB just for Grafana
+# * values_elb.yaml override for Grafana Service
+# * apply with:
+#
+# helm upgrade --install prometheus-stack prometheus-community/kube-prometheus-stack \
+#   --namespace monitoring --create-namespace \
+#   -f values_elb.yaml
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelector: {}  # no selector, so it selects all ServiceMonitors
+
+grafana:
+  service:
+    type: LoadBalancer
+    annotations:
+      # * `internal` -> only accessible within the VPC
+      service.beta.kubernetes.io/aws-load-balancer-internal: "false"
