@@ -187,7 +187,7 @@ jobs:
       - name: Health check
         id: health
         run: |
-          if ! curl -f http://${{ env.ADDRESS }}/healthz; then
+          if ! curl -f http://${{ env.ADDRESS }}/app1/healthz; then
             echo "prod_health=fail" >> $GITHUB_OUTPUT
           else
             echo "prod_health=ok" >> $GITHUB_OUTPUT
