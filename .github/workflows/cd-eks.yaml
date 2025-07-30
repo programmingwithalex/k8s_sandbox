@@ -1,0 +1,155 @@
+name: CD Pipeline - EKS
+
+on:
+  # # push:
+  # #   branches:
+  # #     - main
+  # release:
+  #   types: published
+  workflow_dispatch: {}  # manual triggering workflow
+
+env:
+  # === Project/Cluster Settings ===
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 212135963698
+  EKS_CLUSTER_NAME: web-quickstart
+  NAMESPACE: alex-sandbox
+
+  # === Image/Repository Settings (hardcoded, do not reference env vars here) ===
+  ECR_REPO_APP1: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/app-1
+  ECR_REPO_APP2: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/app-2
+  ECR_REPO_AUTH: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/auth-service
+  ECR_REPO_FRONTEND: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/react-frontend
+
+  # === Folder Paths ===
+  FOLDERPATH_PREFIX: eks
+  FOLDERPATH_APP1: app1
+  FOLDERPATH_APP2: app2
+  FOLDERPATH_AUTH: auth
+  FOLDERPATH_FRONTEND: react-frontend
+
+  # === Helm Release/Chart Names ===
+  HELM_RELEASE_APP1: app1
+  HELM_RELEASE_APP2: app2
+  HELM_RELEASE_AUTH: auth-service
+  HELM_RELEASE_FRONTEND: react-frontend
+  HELM_RELEASE_INGRESS_API: fastapi-ingress-nginx-api
+  HELM_RELEASE_INGRESS_FRONTEND: fastapi-ingress-nginx-frontend
+  HELM_RELEASE_INGRESS_ALB: fastapi-ingress-alb
+
+  HELM_PATH_PATH_PREFIX: eks
+  HELM_PATH_APP1: app1-deployment
+  HELM_PATH_APP2: app2-deployment
+  HELM_PATH_AUTH: auth-deployment
+  HELM_PATH_FRONTEND: react-frontend
+  HELM_PATH_INGRESS_API: ingress_nginx_api
+  HELM_PATH_INGRESS_FRONTEND: ingress_nginx_frontend
+  HELM_PATH_INGRESS_ALB: ingress_alb
+
+  # === Image Tag (use commit SHA for traceability) ===
+  TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      - name: Build and push app1
+        run: |
+          docker build -t $HELM_RELEASE_APP1:$TAG -f \
+            $FOLDERPATH_PREFIX/$FOLDERPATH_APP1/Dockerfile $FOLDERPATH_PREFIX/$FOLDERPATH_APP1
+          docker tag $HELM_RELEASE_APP1:$TAG $ECR_REPO_APP1:$TAG
+          docker push $ECR_REPO_APP1:$TAG
+
+      - name: Build and push app2
+        run: |
+          docker build -t $HELM_RELEASE_APP2:$TAG -f \
+            $FOLDERPATH_PREFIX/$FOLDERPATH_APP2/Dockerfile $FOLDERPATH_PREFIX/$FOLDERPATH_APP2
+          docker tag $HELM_RELEASE_APP2:$TAG $ECR_REPO_APP2:$TAG
+          docker push $ECR_REPO_APP2:$TAG
+
+      - name: Build and push auth-service
+        run: |
+          docker build -t $HELM_RELEASE_AUTH:$TAG -f \
+            $FOLDERPATH_PREFIX/$FOLDERPATH_AUTH/Dockerfile $FOLDERPATH_PREFIX/$FOLDERPATH_AUTH
+          docker tag $HELM_RELEASE_AUTH:$TAG $ECR_REPO_AUTH:$TAG
+          docker push $ECR_REPO_AUTH:$TAG
+
+      - name: Build and push react-frontend
+        run: |
+          docker build -t $HELM_RELEASE_FRONTEND:$TAG -f \
+            $FOLDERPATH_PREFIX/$FOLDERPATH_FRONTEND/Dockerfile $FOLDERPATH_PREFIX/$FOLDERPATH_FRONTEND
+          docker tag $HELM_RELEASE_FRONTEND:$TAG $ECR_REPO_FRONTEND:$TAG
+          docker push $ECR_REPO_FRONTEND:$TAG
+
+      - name: Deploy app1
+        run: |
+          helm upgrade --install $HELM_RELEASE_APP1 $HELM_PATH_PATH_PREFIX/$HELM_PATH_APP1 \
+            --namespace $NAMESPACE --create-namespace \
+            --set image.repository=$ECR_REPO_APP1 \
+            --set image.tag=$TAG
+
+      - name: Deploy app2
+        run: |
+          helm upgrade --install $HELM_RELEASE_APP2 $HELM_PATH_PATH_PREFIX/$HELM_PATH_APP2 \
+            --namespace $NAMESPACE --create-namespace \
+            --set image.repository=$ECR_REPO_APP2 \
+            --set image.tag=$TAG
+
+      - name: Deploy auth-service
+        run: |
+          helm upgrade --install $HELM_RELEASE_AUTH $HELM_PATH_PATH_PREFIX/$HELM_PATH_AUTH \
+            --namespace $NAMESPACE --create-namespace \
+            --set image.repository=$ECR_REPO_AUTH \
+            --set image.tag=$TAG
+
+      - name: Deploy react-frontend
+        run: |
+          helm upgrade --install $HELM_RELEASE_FRONTEND $HELM_PATH_PATH_PREFIX/$HELM_PATH_FRONTEND \
+            --namespace $NAMESPACE --create-namespace \
+            --set image.repository=$ECR_REPO_FRONTEND \
+            --set image.tag=$TAG
+
+      - name: Deploy app API ingress
+        run: |
+          helm upgrade --install $HELM_RELEASE_INGRESS_API $HELM_PATH_PATH_PREFIX/$HELM_PATH_INGRESS_API \
+            --namespace $NAMESPACE --create-namespace
+
+      - name: Deploy frontend ingress
+        run: |
+          helm upgrade --install $HELM_RELEASE_INGRESS_FRONTEND $HELM_PATH_PATH_PREFIX/$HELM_PATH_INGRESS_FRONTEND \
+            --namespace $NAMESPACE --create-namespace
+
+      - name: Deploy ALB ingress
+        run: |
+          helm upgrade --install $HELM_RELEASE_INGRESS_ALB $HELM_PATH_PATH_PREFIX/$HELM_PATH_INGRESS_ALB \
+            --namespace $NAMESPACE --create-namespace

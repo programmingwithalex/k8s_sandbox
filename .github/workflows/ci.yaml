@@ -1,0 +1,135 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: eks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Make
+        run: sudo apt-get update && sudo apt-get install -y make
+
+      # Install uv (fast Python package manager)
+      - name: Install uv
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh  # official `uv` install script
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH  # add `uv` to PATH for subsequent steps
+
+      # Python linting and tests
+      - name: Install Python dependencies
+        run: |
+          uv pip install ruff pytest flake8 mypy isort bandit pylint interrogate wheel setuptools --system
+
+          # flake8-pyproject - for loading flake8 with toml config (https://github.com/microsoft/vscode-flake8/issues/135)
+          uv pip install flake8-pyproject --system
+
+          uv pip install -r app1/pyproject.toml --system
+          uv pip install -r app2/pyproject.toml --system
+          uv pip install -r auth/pyproject.toml --system
+
+      - name: Lint with ruff
+        id: ruff
+        continue-on-error: true  # will check failure after
+        run: |
+          ruff check .
+
+      - name: Lint with flake8
+        id: flake8
+        continue-on-error: true  # will check failure after
+        run: |
+          if [ -f "pyproject.toml" ]; then flake8 --toml-config=pyproject.toml .; else flake8 .; fi
+
+      - name: Lint with mypy
+        id: mypy
+        continue-on-error: true  # will check failure after
+        working-directory: .  # ensures mypy runs in the root directory
+        run: |
+          mypy .
+
+      - name: Lint with pylint  # must have __init__.py in top directory to run recursively
+        id: pylint
+        continue-on-error: true  # will check failure after
+        working-directory: .  # ensures pylint runs in the root directory
+        run: |
+          pylint .
+
+      - name: Lint with interrogate (docstring checker)
+        id: interrogate
+        continue-on-error: true  # will check failure after
+        working-directory: .
+        run: |
+          interrogate .
+
+      - name: Lint with isort
+        run: |
+          # --diff: Prints a diff of all the changes isort would make to a file
+          isort . --diff;
+          echo $"isort_errors";
+
+      - name: check any `flake8`, `mypy`, `pylint`, `interrogate` checks failed
+        if: |
+          (steps.flake8.outcome != 'success') ||
+          (steps.mypy.outcome != 'success') ||
+          (steps.pylint.outcome != 'success') ||
+          (steps.interrogate.outcome != 'success')
+        run: |
+          echo "one or all of flake8, mypy, pylint, or interrogate failed"
+          exit 1
+
+      - name: Test with pytest
+        run: |
+          uv pip install pytest pytest-httpx --system
+          python -m pytest
+
+      - name: Run bandit (security checks)
+        run: |
+          if [ -f "pyproject.toml" ]; then bandit -r . -c "pyproject.toml"; fi
+
+      # # Node/React lint and test
+      # - name: Install frontend dependencies
+      #   run: |
+      #     cd react-frontend
+      #     npm ci
+
+      # - name: Lint frontend (eslint)
+      #   run: |
+      #     cd react-frontend
+      #     npx eslint src
+
+      # - name: Run frontend tests
+      #   run: |
+      #     cd react-frontend
+      #     npm test -- --watchAll=false
+
+      # Helm lint all charts
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Lint all Helm charts
+        run: |
+          find . -type f -name Chart.yaml -exec dirname {} \; | sort -u | xargs -I {} helm lint {}

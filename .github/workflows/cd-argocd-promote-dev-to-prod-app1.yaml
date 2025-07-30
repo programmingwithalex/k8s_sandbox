@@ -1,0 +1,236 @@
+
+name: CD Promotion Pipeline - App 1 - Argo CD
+
+on:
+  workflow_dispatch:
+
+env:
+  # === Project/Cluster Settings ===
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 212135963698
+  ECR_REPO: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/app-1
+
+  # === Image Tag (use commit SHA for traceability) ===
+  IMAGE_TAG: ${{ github.sha }}
+
+  # === Folder Paths ===
+  FOLDERPATH: eks/app1
+
+  # === Helm Release/Chart Names ===
+  HELM_PATH: eks/app1-deployment
+
+  K8S_NAMESPACE_PROD: alex-sandbox-prod
+  EKS_CLUSTER_NAME: web-quickstart  # get from `aws eks list-clusters --region us-east-1`
+  K8S_ALB_INTERNET_FACING: fastapi-ingress-alb-ingress
+
+# actions require write permissions to the repository to commit changes
+permissions:
+  contents: write
+
+jobs:
+  dev-validate:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.image_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      - name: Build and push app image
+        run: |
+          docker build -t $ECR_REPO:${IMAGE_TAG} -f $FOLDERPATH/Dockerfile $FOLDERPATH
+          docker push $ECR_REPO:${IMAGE_TAG}
+
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Update image.tag in dev values file
+        run: |
+          yq -i '.image.tag = "${{ env.IMAGE_TAG }}"' $HELM_PATH/values-dev.yaml
+
+      - name: Set up git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+        run: |
+          git add $HELM_PATH/values-dev.yaml
+          git commit -m "Update image.tag to ${{ env.IMAGE_TAG }} for dev" || echo "No changes to commit"
+          git pull --rebase https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
+          git push https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+
+      - name: Install uv (fast Python package manager)
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh  # official `uv` install script
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH  # add `uv` to PATH for subsequent steps
+
+      - name: Install Python dependencies
+        run: |
+          uv pip install ruff pytest flake8 mypy isort bandit pylint interrogate wheel setuptools --system
+
+          # flake8-pyproject - for loading flake8 with toml config (https://github.com/microsoft/vscode-flake8/issues/135)
+          uv pip install flake8-pyproject --system
+
+          uv pip install -r $FOLDERPATH/pyproject.toml --system
+
+      - name: Run dev tests
+        working-directory: ./eks
+        run: |
+          uv pip install pytest pytest-httpx --system
+          python -m pytest app1/tests
+
+      - name: Set image tag output
+        id: set_tag
+        run: echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+  promote-to-prod:
+    needs: dev-validate
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: prod
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Update image.tag in prod values file
+        run: |
+          yq -i '.image.tag = "${{ needs.dev-validate.outputs.image_tag }}"' $HELM_PATH/values-prod.yaml
+
+      - name: Set up git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+        run: |
+          git add $HELM_PATH/values-prod.yaml
+          git commit -m "Promote image.tag to prod: ${{ needs.dev-validate.outputs.image_tag }}" || echo "No changes to commit"
+          git pull --rebase https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
+          git push https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+
+      - name: Install uv (fast Python package manager)
+        run: |
+          curl -Ls https://astral.sh/uv/install.sh | sh  # official `uv` install script
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH  # add `uv` to PATH for subsequent steps
+
+      - name: Install Python dependencies
+        run: |
+          uv pip install ruff pytest flake8 mypy isort bandit pylint interrogate wheel setuptools --system
+
+          # flake8-pyproject - for loading flake8 with toml config (https://github.com/microsoft/vscode-flake8/issues/135)
+          uv pip install flake8-pyproject --system
+
+          uv pip install -r $FOLDERPATH/pyproject.toml --system
+
+      - name: Run prod tests
+        working-directory: ./eks
+        run: |
+          uv pip install pytest pytest-httpx --system
+          python -m pytest app1/tests
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Get ALB hostname (is internet-facing so we can access it)
+        id: alb
+        run: |
+          ADDRESS=$(kubectl -n $K8S_NAMESPACE_PROD get ingress $K8S_ALB_INTERNET_FACING -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo "alb_url=$ADDRESS" >> $GITHUB_OUTPUT
+          echo "ADDRESS=$ADDRESS" >> $GITHUB_ENV
+
+      - name: Health check
+        id: health
+        run: |
+          if ! curl -f http://${{ env.ADDRESS }}/healthz; then
+            echo "prod_health=fail" >> $GITHUB_OUTPUT
+          else
+            echo "prod_health=ok" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install ArgoCD CLI
+        if: steps.health.outputs.prod_health == 'fail'
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+
+      - name: Get ArgoCD external address
+        if: steps.health.outputs.prod_health == 'fail'
+        id: argocd_lb
+        run: |
+          ARGOCD_SERVER=$(kubectl -n argocd get svc argocd-server -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo "ARGOCD_SERVER=$ARGOCD_SERVER" >> $GITHUB_ENV
+
+      - name: ArgoCD Login
+        if: steps.health.outputs.prod_health == 'fail'
+        run: |
+          argocd login ${{ env.ARGOCD_SERVER }} --username ${{ secrets.ARGOCD_USERNAME }} --password ${{ secrets.ARGOCD_PASSWORD }} --insecure
+
+      - name: Get previous ArgoCD revision
+        if: steps.health.outputs.prod_health == 'fail'
+        id: argocd_prev_rev
+        run: |
+          # Get the second-to-last revision ID (previous version)
+          REVISION=$(argocd app history app1-prod | tail -n +3 | awk '{print $1}' | tail -n 2 | head -n 1)
+          echo "PREV_REVISION=$REVISION" >> $GITHUB_ENV
+
+      # ******************************************************************************* #
+      # * won't work because ArgoCD doesn't allow disabling auto-sync via CLI when using applicationsets * #
+      # * solution would be to disable auto-sync in the ApplicationSet manifest, but not ideal b/c lose GitOps continuity * #
+      # - name: Rollback if prod health fails
+      #   if: steps.health.outputs.prod_health == 'fail'
+      #   run: |
+      #     echo "Disabling auto-sync..."
+      #     argocd app set app1-prod --sync-policy none
+      #     echo "Pausing for 5 seconds..."
+      #     sleep 5  # wait for the sync to be disabled - doesn't happen instantly
+      #     echo "Rolling back prod deployment to revision ${{ env.PREV_REVISION }}..."
+      #     argocd app rollback app1-prod ${{ env.PREV_REVISION }}
+      #     echo "Re-enabling auto-sync..."
+      #     argocd app set app1-prod --sync-policy automated
+      # ******************************************************************************* #
