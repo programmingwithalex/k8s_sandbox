@@ -1,0 +1,87 @@
+name: CD Pipeline - App 1 - Argo CD
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  # === Project/Cluster Settings ===
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 212135963698
+  ECR_REPO: 212135963698.dkr.ecr.us-east-1.amazonaws.com/eks-sandbox-alex/app-1
+
+  # === Image Tag (use commit SHA for traceability) ===
+  IMAGE_TAG: ${{ github.sha }}
+
+  # === Folder Paths ===
+  FOLDERPATH: eks/app1
+
+  # === Helm Release/Chart Names ===
+  HELM_PATH: eks/app1-deployment
+
+# actions require write permissions to the repository to commit changes
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      ENVIRONMENT: ${{ github.event_name == 'push' && 'prod' || github.event.inputs.environment }}
+      VALUES_FILE: ${{ github.event.inputs.environment == 'prod' && 'values-prod.yaml' || 'values-dev.yaml' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      - name: Build and push app image
+        run: |
+          docker build -t $ECR_REPO:${IMAGE_TAG} -f $FOLDERPATH/Dockerfile $FOLDERPATH
+          docker push $ECR_REPO:${IMAGE_TAG}
+
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Update image.tag in values file
+        run: |
+          yq -i '.image.tag = "${{ env.IMAGE_TAG }}"' $HELM_PATH/${{ env.VALUES_FILE }}
+
+      - name: Set up git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+        run: |
+          git add $HELM_PATH/${{ env.VALUES_FILE }}
+          git commit -m "Update image.tag to ${{ env.IMAGE_TAG }} for ${{ env.ENVIRONMENT }}" || echo "No changes to commit"
+          git pull --rebase https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
+          git push https://x-access-token:${GH_ACCESS_TOKEN}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
