@@ -810,6 +810,12 @@ Get password credential (username is `admin`):
 argocd admin initial-password -n argocd
 ```
 
+Authenticate in terminal:
+
+```powershell
+argocd login <ARGOCD_SERVER> --username <USERNAME> --password <PASSWORD> --insecure
+```
+
 #### Access Argo CD UI Dashboard
 
 ```powershell
@@ -854,6 +860,26 @@ argocd app create app1 `
 - will deploy updated Docker image to ECR with the `github.sha` as the Docker image tag
 - then updates the Helm `values.yaml` of the specific microservice at the `image.tag` value with the `github.sha` value
   - updating here triggers the Argo CD sync to pull the associated ECR Docker image with the updated `image.tag` value in `values.yaml`
+
+##### Using Automated Rollbacks with CD Pipeline
+
+- will only work if set `syncPolicy` to None in `application_sets/application_set.yaml`
+  - CD workflow `.github/workflows/cd-argocd-promote-dev-to-prod-app1.yaml`
+    - to use `kubectl` or the `argocd` CLI to set `syncPolicy` to None is immediately overwritten, so never disabled
+    - it must be disabled otherwise rolling back the revision gives error saying it must be
+
+**`application_sets/application_set.yaml`**
+
+```yaml
+syncPolicy:
+  # automated: {}
+```
+
+- must set the `argocd-server` service to have a LoadBalancer external IP so it can be reached by the GitHub Action
+  - `kubectl patch svc argocd-server -n argocd -p '{\"spec\": {\"type\": \"LoadBalancer\"}}'`
+  - verify with: `kubectl get service -n argocd` and checking `argocd-server` `TYPE`
+
+-
 
 #### Argo CD Grouping
 
