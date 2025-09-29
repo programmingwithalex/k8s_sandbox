@@ -1,5 +1,40 @@
 # Kubernetes Sandbox
 
+## Components
+
+```markdown
+| Kubernetes           | ECS Equivalent               | Purpose                                                          |
+| -------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| **Control Plane**    | EKS Control Plane (AWS)      | API server, scheduler, controller manager                        |
+| **Controller**       | ECS Service Scheduler        | Watches resource state and drives changes to match desired state |
+| **Pod**              | Task                         | Smallest deployable unit (1+ containers)                         |
+| **Deployment**       | Service + Task Definition    | Manages rollout, replicas, and health                            |
+| **Service**          | Load Balancer Target Group   | Stable IP/DNS for a group of Pods                                |
+| **Node**             | EC2 Instance or Fargate Task | Worker machine that runs Pods                                    |
+| **Cluster**          | ECS Cluster                  | A group of Nodes managed by control plane                        |
+| **Ingress**          | API Gateway / ALB            | Exposes Services to the outside world (Layer 7)                  |
+| **ConfigMap/Secret** | Parameter Store / SecretsMgr | Inject config and secrets into apps                              |
+| **ServiceMonitor**   | AWS Service for Prometheus   | Defines scraping configuration for Services to collect metrics   |
+
+```
+
+### Ingress
+
+- Layer 7 (HTTP)
+- customized routing via hostnames and path rules
+- reverse proxy in front of multiple Services
+
+#### Ingress Controllers
+
+- cluster-level infrastructure
+- usually stored in separate namespace from apps
+
+#### Ingress Resources
+
+- YAML files that mapp `myapp.example.com` --> `app1 service`
+- should be in same namespace as app/service they expose
+  - `ingress controller` will see them and route traffic accordingly, even though different namespaces
+
 ## Project Layout
 
 ```markdown
@@ -147,12 +182,6 @@ You can use the provided `Makefile` to automate common deployment tasks for both
 
 #### Usage
 
-List available targets:
-
-```powershell
-make help
-```
-
 Typical commands:
 
 ##### Local Deployment
@@ -265,25 +294,28 @@ k3d cluster create demo `
 
 - Install `Nginx` Ingress Controller:
   - specifying `controller.service.type` as `LoadBalancer` which causes `MetalLB` to auto-assign IP from its pool
+  - install in own custom `namespace`
+    - Ingress Controller is a cluster-wide resource
 
 ```powershell
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 
 helm install ingress-nginx ingress-nginx/ingress-nginx `
-  --namespace alex-sandbox `
+  --namespace ingress-nginx `
   --create-namespace `
   --set controller.metrics.enabled=true `
   --set controller.metrics.port=10254 `
   --set controller.metrics.service.enabled=true `
   --set controller.metrics.service.port=10254 `
   --set controller.metrics.service.targetPort=10254 `
-  --set controller.metrics.serviceMonitor.enabled=true `
   --set controller.metrics.serviceMonitor.interval=30s `
   --set controller.metrics.serviceMonitor.selector.matchLabels.release=prometheus-stack
 ```
 
-- for exporting metrics to be consumed by `grafana`
+- if didn't install prometheus helm chart yet, just leave off `--set controller.metrics.serviceMonitor.enabled=true `
+
+For exporting metrics to be consumed by `grafana`:
 
 ```powershell
 helm upgrade ingress-nginx ingress-nginx/ingress-nginx `
@@ -385,24 +417,6 @@ helm upgrade ingress-nginx ingress-nginx/ingress-nginx `
 ```bash
 image: <account>.dkr.ecr.<region>.amazonaws.com/myapp:1.2.3
 imagePullPolicy: IfNotPresent
-```
-
-## Components
-
-```markdown
-| Kubernetes           | ECS Equivalent               | Purpose                                                          |
-| -------------------- | ---------------------------- | ---------------------------------------------------------------- |
-| **Control Plane**    | EKS Control Plane (AWS)      | API server, scheduler, controller manager                        |
-| **Controller**       | ECS Service Scheduler        | Watches resource state and drives changes to match desired state |
-| **Pod**              | Task                         | Smallest deployable unit (1+ containers)                         |
-| **Deployment**       | Service + Task Definition    | Manages rollout, replicas, and health                            |
-| **Service**          | Load Balancer Target Group   | Stable IP/DNS for a group of Pods                                |
-| **Node**             | EC2 Instance or Fargate Task | Worker machine that runs Pods                                    |
-| **Cluster**          | ECS Cluster                  | A group of Nodes managed by control plane                        |
-| **Ingress**          | API Gateway / ALB            | Exposes Services to the outside world                            |
-| **ConfigMap/Secret** | Parameter Store / SecretsMgr | Inject config and secrets into apps                              |
-| **ServiceMonitor**   | AWS Service for Prometheus   | Defines scraping configuration for Services to collect metrics   |
-
 ```
 
 ### Controller
@@ -888,10 +902,9 @@ syncPolicy:
 
 ## MetalLB - Load Balancer Locally - In Addition to Ingress
 
-- Kubernetes’ built‑in LoadBalancer type only works on cloud platforms (AWS, GCP, Azure), leaving bare‑metal clusters stuck
-  with `NodePort` or `cluster IPs` which are clunky and not production‑grade. MetalLB fills that gap by implementing a true
-  network load balancer for on‑prem environments, integrating with your existing routers/switches so Services of type
-  LoadBalancer “just work” the same way they do in the cloud.
+- Kubernetes’ built‑in LoadBalancer type only works on cloud platforms (AWS, GCP, Azure), leaving bare‑metal clusters stuck with `NodePort` or `cluster IPs` which are clunky and not production‑grade
+- Kubernetes doesn’t have a built-in LoadBalancer. MetalLB provides that functionality, so if your services (apps, ingress) are of type LoadBalancer, you need MetalLB. Without it, those services will sit in pending state and never get an external IP
+- will assign an `IP pool` to the `MetalLB` LoadBalancer, which can then be used to assign an IP to the `ingress`
 - `Nginx` Service will be auto-assigned an IP from the `MetalLB` load balancer
   - no special annotation needed on the `nginx` Service
   - any Service whose spec.type is `LoadBalancer` will automatically be picked up by MetalLB and handed an IP from its pool

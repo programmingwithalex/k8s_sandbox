@@ -1,5 +1,5 @@
 apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
+kind: IPAddressPool  # CRD for MetalLB IP address pool (IPv4/IPv6)
 metadata:
   namespace: metallb-system
   name: default-pool
@@ -8,7 +8,7 @@ spec:
   - 172.21.0.0/24
 ---
 apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
+kind: L2Advertisement  # Layer 2 adversisement (IPv4/IPv6)
 metadata:
   namespace: metallb-system
   name: default
