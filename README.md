@@ -94,7 +94,7 @@ Main components:
    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
    helm repo update
    helm install ingress-nginx ingress-nginx/ingress-nginx `
-     --namespace alex-sandbox `
+     --namespace ingress-nginx-controller `
      --create-namespace
    ```
 
@@ -901,6 +901,9 @@ syncPolicy:
 - use `Argo CD` built in `projects`
 
 ## MetalLB - Load Balancer Locally - In Addition to Ingress
+
+- works with `Service` of type `LoadBalancer` (Layer 4)
+- does **not** work with ~~`Ingress`~~ (Layer 7)
 
 - Kubernetes’ built‑in LoadBalancer type only works on cloud platforms (AWS, GCP, Azure), leaving bare‑metal clusters stuck with `NodePort` or `cluster IPs` which are clunky and not production‑grade
 - Kubernetes doesn’t have a built-in LoadBalancer. MetalLB provides that functionality, so if your services (apps, ingress) are of type LoadBalancer, you need MetalLB. Without it, those services will sit in pending state and never get an external IP
